@@ -1,0 +1,16 @@
+
+# Ignore Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ignore the database file
+financial_data.db
+
+# Ignore all log files
+*.log
+
+# Ignore JSON files containing sensitive data
+tickers.json
+
+
