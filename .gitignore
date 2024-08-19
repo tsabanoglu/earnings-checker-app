@@ -1,3 +1,5 @@
+# Ignore Streamlit configuration files if necessary
+.streamlit/config.tomlc
 
 # Ignore Python bytecode and caches
 __pycache__/
