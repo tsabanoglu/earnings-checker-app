@@ -2,11 +2,11 @@ import sqlite3
 import pandas as pd
 import logging
 import yfinance as yf
-from datetime import datetime, timedelta
 import json
 import requests
 from bs4 import BeautifulSoup
 import re
+from datetime import datetime
 import streamlit as st
 
 # Regular expression pattern to match valid stock tickers
@@ -18,7 +18,7 @@ def scrape_tickers(url, category):
     response.raise_for_status()
     soup = BeautifulSoup(response.text, 'html.parser')
     ticker_elements = soup.find_all('a', href=True)
-    
+
     tickers = []
     for element in ticker_elements:
         href = element['href']
@@ -40,7 +40,7 @@ def save_tickers_to_json(filename):
     all_tickers = []
     for url, category in urls:
         all_tickers.extend(scrape_tickers(url, category))
-    
+
     with open(filename, 'w') as f:
         json.dump(all_tickers, f)
 
@@ -69,32 +69,93 @@ def initialize_database(db_path):
         ebitda REAL,
         employee_count INTEGER,
         trailing_pe REAL,
-        category TEXT
+        category TEXT,
+        UNIQUE(ticker, quarter)  -- Ensure no duplicate records for the same ticker and quarter
     )
     ''')
 
     conn.commit()
     conn.close()
 
+def load_tickers_from_db(db_path):
+    """Load the list of tickers from the database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT DISTINCT ticker FROM quarterly_revenue')
+    tickers = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return tickers
+
 # --- Insert Data Functions ---
 
-def insert_quarterly_revenue(conn, ticker, name, quarter, revenue, earnings_date, revenue_growth, revenue_average, gross_profit, net_income, ebitda, employee_count, trailing_pe):
-    """Insert a record into the quarterly_revenue table."""
+def insert_quarterly_revenue(conn, ticker, name, quarter, revenue, earnings_date, revenue_growth, revenue_average, gross_profit, net_income, ebitda, employee_count, trailing_pe, category):
+    """Insert or update a record in the quarterly_revenue table."""
     cursor = conn.cursor()
     cursor.execute('''
     INSERT INTO quarterly_revenue (
         ticker, name, quarter, revenue, earnings_date, revenue_growth, revenue_average,
-        gross_profit, net_income, ebitda, employee_count, trailing_pe
+        gross_profit, net_income, ebitda, employee_count, trailing_pe, category
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ticker, quarter) DO UPDATE SET
+        revenue = excluded.revenue,
+        earnings_date = excluded.earnings_date,
+        revenue_growth = excluded.revenue_growth,
+        revenue_average = excluded.revenue_average,
+        gross_profit = excluded.gross_profit,
+        net_income = excluded.net_income,
+        ebitda = excluded.ebitda,
+        employee_count = excluded.employee_count,
+        trailing_pe = excluded.trailing_pe
     ''', (ticker, name, quarter, revenue, earnings_date, revenue_growth, revenue_average,
-          gross_profit, net_income, ebitda, employee_count, trailing_pe))
+          gross_profit, net_income, ebitda, employee_count, trailing_pe, category))
     conn.commit()
+
+def populate_initial_data(db_path):
+    """Populate the database with initial data from the scraped tickers."""
+    conn = sqlite3.connect(db_path)
+
+    # Load tickers from the JSON file
+    with open('tickers.json', 'r') as f:
+        tickers = json.load(f)
+
+    for ticker_data in tickers:
+        ticker = ticker_data['ticker']
+        category = ticker_data['category']
+
+        try:
+            stock = yf.Ticker(ticker)
+            earnings_calendar = stock.calendar
+            next_earnings_date = earnings_calendar.get('Earnings Date')
+            if next_earnings_date is not None:
+                next_earnings_date = pd.to_datetime(next_earnings_date[0]).date()
+                latest_revenue = stock.quarterly_financials.loc['Total Revenue'].max() if 'Total Revenue' in stock.quarterly_financials.index else None
+                revenue_growth = stock.quarterly_financials.loc['Total Revenue'].pct_change().mean() * 100 if 'Total Revenue' in stock.quarterly_financials.index else None
+                revenue_average = None
+                if isinstance(earnings_calendar, dict) and 'Revenue Average' in earnings_calendar:
+                    revenue_average = earnings_calendar['Revenue Average']
+
+                # Get other financial metrics
+                quarterly_financials = stock.quarterly_financials
+                gross_profit = quarterly_financials.loc['Gross Profit'].max() if 'Gross Profit' in quarterly_financials.index else None
+                net_income = quarterly_financials.loc['Net Income'].max() if 'Net Income' in quarterly_financials.index else None
+                ebitda = quarterly_financials.loc['EBITDA'].max() if 'EBITDA' in quarterly_financials.index else None
+                employee_count = stock.info.get('fullTimeEmployees', None)
+                trailing_pe = stock.info.get('trailingPE', None)
+
+                # Determine the quarter of the next earnings date
+                quarter = next_earnings_date.strftime('%Q-%Y')
+                insert_quarterly_revenue(conn, ticker, stock.info.get('longName', 'N/A'), quarter, latest_revenue, next_earnings_date.strftime('%Y-%m-%d'), revenue_growth, revenue_average, gross_profit, net_income, ebitda, employee_count, trailing_pe, category)
+        except Exception as e:
+            logging.error("Error saving data for %s: %s", ticker, e)
+            print(f"Error saving data for {ticker}: {e}")  # Debug statement
+
+    conn.close()
 
 def update_database(db_path):
     """Fetch data from Yahoo Finance and update the database."""
     conn = sqlite3.connect(db_path)
-    tickers = load_tickers_from_db(db_path)  # Function is defined further down
+    tickers = load_tickers_from_db(db_path)
 
     for ticker in tickers:
         try:
@@ -108,7 +169,7 @@ def update_database(db_path):
                 revenue_average = None
                 if isinstance(earnings_calendar, dict) and 'Revenue Average' in earnings_calendar:
                     revenue_average = earnings_calendar['Revenue Average']
-                
+
                 # Get other financial metrics
                 quarterly_financials = stock.quarterly_financials
                 gross_profit = quarterly_financials.loc['Gross Profit'].max() if 'Gross Profit' in quarterly_financials.index else None
@@ -116,13 +177,29 @@ def update_database(db_path):
                 ebitda = quarterly_financials.loc['EBITDA'].max() if 'EBITDA' in quarterly_financials.index else None
                 employee_count = stock.info.get('fullTimeEmployees', None)
                 trailing_pe = stock.info.get('trailingPE', None)
-                
+
                 # Determine the quarter of the next earnings date
                 quarter = next_earnings_date.strftime('%Q-%Y')
                 insert_quarterly_revenue(conn, ticker, stock.info.get('longName', 'N/A'), quarter, latest_revenue, next_earnings_date.strftime('%Y-%m-%d'), revenue_growth, revenue_average, gross_profit, net_income, ebitda, employee_count, trailing_pe)
         except Exception as e:
             logging.error("Error saving data for %s: %s", ticker, e)
+            print(f"Error saving data for {ticker}: {e}")  # Debug statement
+
     conn.close()
+
+# Initialize the database and populate it with data
+db_path = 'financial_data.db'
+initialize_database(db_path)
+
+# Populate the database with initial data if it's empty
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
+cursor.execute('SELECT COUNT(*) FROM quarterly_revenue')
+count = cursor.fetchone()[0]
+conn.close()
+
+if count == 0:
+    populate_initial_data(db_path)
 
 # --- Fetching Data Functions ---
 
