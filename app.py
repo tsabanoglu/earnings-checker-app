@@ -247,6 +247,7 @@ def check_earnings_for_ticker(db_path, ticker):
     else:
         return f"No earnings calls for {ticker} in the next 7 days."
 
+
 # --- Streamlit Web App ---
 
 # Function to load tickers from the database
@@ -267,7 +268,7 @@ def load_categories_from_db(db_path):
 def fetch_upcoming_earnings(db_path, start_days, end_days, selected_category=None):
     conn = sqlite3.connect(db_path)
     query = f"""
-        SELECT ticker, name AS 'Name', revenue AS 'Quarterly Revenue', earnings_date AS 'Earnings Date',
+        SELECT ticker, name AS 'Name', earnings_date AS 'Next Earnings Date', revenue AS 'Quarterly Revenue',
                revenue_growth AS 'Quarterly Revenue Growth (%)', revenue_average AS 'Next Revenue Estimate'
         FROM quarterly_revenue
         WHERE earnings_date BETWEEN DATE('now', '+{start_days} days') AND DATE('now', '+{end_days} days')
@@ -287,7 +288,7 @@ def fetch_upcoming_earnings(db_path, start_days, end_days, selected_category=Non
 def get_company_details(ticker, db_path):
     conn = sqlite3.connect(db_path)
     query = f"""
-        SELECT name AS 'Name', revenue AS 'Quarterly Revenue', earnings_date AS 'Earnings Date',
+        SELECT name AS 'Name', earnings_date AS 'Next Earnings Date', revenue AS 'Quarterly Revenue',
                revenue_growth AS 'Quarterly Revenue Growth (%)', revenue_average AS 'Next Revenue Estimate',
                gross_profit AS 'Gross Profit', net_income AS 'Net Income', ebitda AS 'EBITDA',
                employee_count AS 'Employee Count', trailing_pe AS 'Trailing P/E', category AS 'Category'
@@ -311,7 +312,7 @@ def get_earnings_beat_or_miss(ticker, db_path):
 
         if pd.isna(latest_revenue) or pd.isna(revenue_average):
             return 'Unknown'
-        
+
         if latest_revenue > revenue_average:
             return 'Beat'
         elif latest_revenue < revenue_average:
@@ -320,7 +321,7 @@ def get_earnings_beat_or_miss(ticker, db_path):
             return 'Met'
     else:
         return 'Unknown'
-
+        
 # Set the page title and other configurations
 st.set_page_config(
     page_title="Earnings Checker App",
@@ -349,9 +350,9 @@ st.sidebar.subheader('Earnings in the Next 28 Days')
 
 date_range = st.sidebar.slider(
     'Select Date Range for Earnings:',
-    min_value=1,
+    min_value=0,  # Changed min_value to 0 to include today
     max_value=28,
-    value=(1, 7)
+    value=(0, 7)  # Default range starts from today
 )
 
 # Extract start and end days from the slider
@@ -396,15 +397,14 @@ if beat_or_miss != 'All':
 if not df_upcoming_earnings.empty:
     df_upcoming_earnings = df_upcoming_earnings.rename(columns={
         'ticker': 'Ticker Symbol',
-        'Name': 'Company Name',
+        'Next Earnings Date': 'Next Earnings Date',
         'Quarterly Revenue': 'Quarterly Revenue',
-        'Earnings Date': 'Earnings Date',
         'Quarterly Revenue Growth (%)': 'Quarterly Revenue Growth (%)',
-        'Revenue Average': 'Revenue Average',
+        'Next Revenue Estimate': 'Next Revenue Estimate',
     })
 
-    # Convert 'Earnings Date' to datetime
-    df_upcoming_earnings['Earnings Date'] = pd.to_datetime(df_upcoming_earnings['Earnings Date']).dt.date
+    # Convert 'Next Earnings Date' to datetime
+    df_upcoming_earnings['Next Earnings Date'] = pd.to_datetime(df_upcoming_earnings['Next Earnings Date']).dt.date
 
     # Apply formatting and highlighting
     styled_df = df_upcoming_earnings.style.format({
@@ -442,7 +442,7 @@ if selected_ticker:
                 if 'Growth' in metric or 'P/E' in metric:
                     return f"{val:.0f}%"
                 # Then check for Revenue, Profit, or related metrics to apply currency formatting
-                elif any(keyword in metric for keyword in ['Revenue', 'Profit', 'Net Income', 'EBITDA']):
+                elif any (keyword in metric for keyword in ['Revenue', 'Profit', 'Net Income', 'EBITDA']):
                     return f"${val:,.0f}"
             return val
 
@@ -480,7 +480,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Display the note
+# Disclaimer
 st.markdown("""
 **Note:** This app gets data from Yahoo Finance. Some metrics may display as "None" or be missing if the company has not made this information publicly available. The earnings data provided here is for informational purposes only. Always consult official financial reports and disclosures before making any investment decisions.
 """)
+
