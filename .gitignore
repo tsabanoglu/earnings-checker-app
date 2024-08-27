@@ -1,18 +1,10 @@
-# Ignore Streamlit configuration files if necessary
-.streamlit/config.tomlc
-
-# Ignore Python bytecode and caches
+.streamlit/config.toml
 __pycache__/
 *.py[cod]
 *.pyo
-
-# Ignore the database file
 financial_data.db
-
-# Ignore all log files
 *.log
+*.env
 
-# Ignore JSON files containing sensitive data
-# tickers.json
 
 
