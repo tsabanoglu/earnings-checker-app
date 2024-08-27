@@ -1,4 +1,5 @@
 .streamlit/config.toml
+.DS_Store
 __pycache__/
 *.py[cod]
 *.pyo
