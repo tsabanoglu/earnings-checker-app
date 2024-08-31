@@ -209,7 +209,7 @@ def fetch_companies_with_earnings(db_path, ticker=None):
     if ticker:
         query = '''
             SELECT ticker, name, revenue, earnings_date, revenue_growth, revenue_average, 
-                    gross_profit, net_income, ebitda, employee_count, trailing_pe, quarter
+                    gross_profit, ebitda, net_income, employee_count, trailing_pe, quarter
             FROM quarterly_revenue
             WHERE ticker = ? AND earnings_date >= DATE('now') AND earnings_date <= DATE('now', '+7 days')
         '''
@@ -217,7 +217,7 @@ def fetch_companies_with_earnings(db_path, ticker=None):
     else:
         query = '''
             SELECT ticker, name, quarter, revenue, earnings_date, revenue_growth, revenue_average, 
-                    gross_profit, net_income, ebitda, employee_count, trailing_pe 
+                    gross_profit, ebitda, net_income, employee_count, trailing_pe 
             FROM quarterly_revenue
             WHERE earnings_date >= DATE('now') AND earnings_date <= DATE('now', '+7 days')
         '''
