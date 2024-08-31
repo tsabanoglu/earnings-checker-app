@@ -290,7 +290,7 @@ def get_company_details(ticker, db_path):
     query = f"""
         SELECT name AS 'Name', earnings_date AS 'Next Earnings Date', revenue AS 'Quarterly Revenue',
                revenue_growth AS 'Quarterly Revenue Growth (%)', revenue_average AS 'Next Revenue Estimate',
-               gross_profit AS 'Gross Profit', net_income AS 'Net Income', ebitda AS 'EBITDA',
+               gross_profit AS 'Gross Profit', ebitda AS 'EBITDA', net_income AS 'Net Income',
                employee_count AS 'Employee Count', trailing_pe AS 'Trailing P/E', category AS 'Category'
         FROM quarterly_revenue
         WHERE ticker = '{ticker}'
