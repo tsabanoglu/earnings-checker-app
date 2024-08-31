@@ -233,7 +233,7 @@ def check_earnings_for_ticker(db_path, ticker):
     conn = sqlite3.connect(db_path)
     query = '''
         SELECT ticker, name, quarter, revenue, earnings_date, revenue_growth, revenue_average, 
-                gross_profit, net_income, ebitda, employee_count, trailing_pe
+                gross_profit, ebitda, net_income, employee_count, trailing_pe
         FROM quarterly_revenue
         WHERE ticker = ? AND earnings_date >= DATE('now') AND earnings_date <= DATE('now', '+7 days')
     '''
