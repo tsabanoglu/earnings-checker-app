@@ -5,6 +5,6 @@ __pycache__/
 financial_data.db
 *.log
 *.env
-
-
+*.json
+.venv/
 

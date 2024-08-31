@@ -442,7 +442,7 @@ if selected_ticker:
                 if 'Growth' in metric or 'P/E' in metric:
                     return f"{val:.0f}%"
                 # Then check for Revenue, Profit, or related metrics to apply currency formatting
-                elif any (keyword in metric for keyword in ['Revenue', 'Profit', 'Net Income', 'EBITDA']):
+                elif any (keyword in metric for keyword in ['Revenue', 'Profit', 'EBITDA', 'Net Income']):
                     return f"${val:,.0f}"
             return val
 
